@@ -22,43 +22,53 @@ export function TokenLaunchpad() {
     const connection = useMemo(() => new Connection(endpoint), [endpoint]);
 
     async function createToken() {
-        if (!wallet.publicKey || !wallet.signTransaction) {
-            alert("Wallet not connected");
-            return;
+        console.log("createToken called");
+        try {
+            if (!wallet.publicKey || !wallet.signTransaction) {
+                alert("Wallet not connected");
+                return;
+            }
+
+            const mintKeypair = Keypair.generate();
+            const lamports = await getMinimumBalanceForRentExemptMint(connection);
+
+            const decimals = 9;
+            const mintAuthority = wallet.publicKey;
+            const freezeAuthority = wallet.publicKey;
+
+
+            const transaction = new Transaction().add(
+                SystemProgram.createAccount({
+                    fromPubkey: wallet.publicKey,
+                    newAccountPubkey: mintKeypair.publicKey,
+                    space: MINT_SIZE,
+                    lamports,
+                    programId: TOKEN_PROGRAM_ID,
+                }),
+                createInitializeMint2Instruction(
+                    mintKeypair.publicKey,
+                    decimals,
+                    mintAuthority,
+                    freezeAuthority,
+                    TOKEN_PROGRAM_ID
+                )
+            );
+
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+            transaction.feePayer = wallet.publicKey;
+
+            transaction.partialSign(mintKeypair);
+
+            const signedTx = await wallet.signTransaction(transaction);
+            const txid = await connection.sendRawTransaction(signedTx.serialize());
+            await connection.confirmTransaction(txid);
+
+            alert(`Token created! Mint address: ${mintKeypair.publicKey.toBase58()}`);
+        } catch (err) {
+            console.error("Token creation error:", err);
+            alert("Error: " + err.message);
         }
-
-        const mintKeypair = Keypair.generate();
-        const lamports = await getMinimumBalanceForRentExemptMint(connection);
-
-        const decimals = 9;
-        const mintAuthority = wallet.publicKey;
-        const freezeAuthority = wallet.publicKey;
-
-
-        const transaction = new Transaction().add(
-            SystemProgram.createAccount({
-                fromPubkey: wallet.publicKey,
-                newAccountPubkey: mintKeypair.publicKey,
-                space: MINT_SIZE,
-                lamports,
-                programId: TOKEN_PROGRAM_ID,
-            }),
-            createInitializeMint2Instruction(
-                mintKeypair.publicKey,
-                decimals,
-                mintAuthority,
-                freezeAuthority,
-                TOKEN_PROGRAM_ID
-            )
-        );
-
-        transaction.partialSign(mintKeypair);
-
-        const signedTx = await wallet.signTransaction(transaction);
-        const txid = await connection.sendRawTransaction(signedTx.serialize());
-        await connection.confirmTransaction(txid);
-
-        alert(`Token created! Mint address: ${mintKeypair.publicKey.toBase58()}`);
     }
 
     return (
@@ -81,7 +91,9 @@ export function TokenLaunchpad() {
             <input className='inputText' type='text' placeholder='Symbol' /> <br />
             <input className='inputText' type='text' placeholder='Image URL' /> <br />
             <input className='inputText' type='text' placeholder='Initial Supply' /> <br />
-            <button onClick={createToken} className='btn'>Create a token</button>
+            <button onClick={() => { console.log("Button clicked"); createToken(); }} className='btn'>
+                Create a token
+            </button>
         </div>
     );
 }
