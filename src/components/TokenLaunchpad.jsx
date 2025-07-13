@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
     createInitializeMint2Instruction,
